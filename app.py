@@ -1,44 +1,23 @@
 import io
 import os
-import sys
-
-# Automatically launch with Streamlit runtime if executed directly via `python app.py`
-if __name__ == "__main__":
-    try:
-        from streamlit.runtime import exists as _streamlit_exists
-        if not _streamlit_exists():
-            from streamlit.web import cli as stcli
-            sys.argv = ["streamlit", "run", os.path.abspath(__file__)]
-            sys.exit(stcli.main())
-    except ImportError:
-        pass
-
 import streamlit as st
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from PyPDF2 import PdfReader, PdfWriter
 
-# --- Page Configuration & Dark / Neon Purple Theme ---
+# --- Page Configuration & Styling ---
 st.set_page_config(
     page_title="PugArch Payslip Generator",
     page_icon="📄",
     layout="wide"
 )
 
-# Custom CSS for Pitch Black & Neon Purple Styling
 st.markdown("""
 <style>
     /* Global Background */
     .stApp {
         background-color: #0A090D;
         color: #FFFFFF;
-    }
-    
-    /* Card Containers */
-    div[data-testid="stVerticalBlock"] > div[style*="background-color"] {
-        background-color: #14121E !important;
-        border-radius: 10px;
-        border: 1px solid #3B1C59;
     }
     
     /* Section Headers & Labels */
@@ -51,7 +30,7 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* Input Boxes */
+    /* Input Fields */
     input {
         background-color: #1D192B !important;
         color: #FFFFFF !important;
@@ -79,13 +58,13 @@ st.markdown("""
         font-weight: bold;
     }
 
-    /* Primary Buttons & Download Buttons */
+    /* Download & Action Buttons */
     .stDownloadButton button, .stButton button {
         background: linear-gradient(135deg, #7E22CE, #9333EA) !important;
         color: #FFFFFF !important;
         border: none !important;
         border-radius: 6px !important;
-        padding: 10px 24px !important;
+        padding: 12px 24px !important;
         font-weight: 600 !important;
         transition: all 0.2s ease-in-out;
         width: 100%;
@@ -97,61 +76,69 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Field lists matching Pugarch Payslip_1.pdf
 EARNINGS_KEYS = [
     "Basic Pay", "HRA", "Conveyance", "Medical Allowance", 
-    "KRA", "DA", "Incentives"
+    "DA", "Incentives"
 ]
-DEDUCTIONS_KEYS = ["PF", "PT"]
+DEDUCTIONS_KEYS = ["PT", "Leave Without Pay"]
+
 
 def create_overlay(data):
-    """Creates a transparent PDF overlay using calibrated coordinates."""
+    """Draws values onto a transparent PDF overlay using calibrated coordinates."""
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
 
-    # 1. Header Details (10pt)
+    # 1. Header Details (10pt Helvetica)
     c.setFont("Helvetica", 10)
     c.drawString(180, 686, f"{data['details']['pay_period']}")
     c.drawString(180, 664, f"{data['details']['emp_name']}")
     c.drawString(180, 642, f"{data['details']['account_number']}")
+    c.drawString(180, 620, f"{data['details']['days_worked']}")
     
     c.drawString(420, 686, f"{data['details']['emp_id']}")
     c.drawString(420, 664, f"{data['details']['position']}")
     c.drawString(420, 642, f"{data['details']['ifsc_code']}")
+    c.drawString(420, 620, f"{data['details']['days_on_leave']}")
 
-    # 2. Earnings Table (11pt)
-    c.setFont("Helvetica", 11)
-    y_earnings = 543.0
+    # Shared horizontal center for the Amount column
+    X_AMOUNT = 412
+
+    # 2. Earnings Table (13pt Helvetica)
+    c.setFont("Helvetica", 13)
+    y_earnings = 513.5
     row_pitch_earnings = 26.85
 
     for category in EARNINGS_KEYS:
         amount = data["earnings"].get(category, 0.0)
-        c.drawCentredString(430, round(y_earnings), f"{amount:.2f}")
+        c.drawCentredString(X_AMOUNT, round(y_earnings), f"{amount:.2f}")
         y_earnings -= row_pitch_earnings
             
-    c.drawCentredString(430, 350, f"{data['earnings']['Total']:.2f}")
+    c.drawCentredString(X_AMOUNT, 352, f"{data['earnings']['Total']:.2f}")
 
-    # 3. Deductions Table (11pt)
-    c.setFont("Helvetica", 11)
-    y_deductions = 255
-    row_pitch_deductions = 24
+    # 3. Deductions Table (13pt Helvetica)
+    c.setFont("Helvetica", 13)
+    y_deductions = 251.0
+    row_pitch_deductions = 26.85
 
     for category in DEDUCTIONS_KEYS:
         amount = data["deductions"].get(category, 0.0)
-        c.drawCentredString(430, y_deductions, f"{amount:.2f}")
+        c.drawCentredString(X_AMOUNT, round(y_deductions), f"{amount:.2f}")
         y_deductions -= row_pitch_deductions
             
-    c.drawCentredString(430, 207, f"{data['deductions']['Total']:.2f}")
+    c.drawCentredString(X_AMOUNT, 195.0, f"{data['deductions']['Total']:.2f}")
 
-    # 4. Net Salary (12pt Bold)
-    c.setFont("Helvetica-Bold", 12)
+    # 4. Net Salary (14pt Bold)
+    c.setFont("Helvetica-Bold", 14)
     c.drawString(185, 162, f"{data['net_salary']:.2f}")
 
     c.save()
     packet.seek(0)
     return packet
 
+
 def generate_payslip_bytes(template_bytes, data):
-    """Merges overlay with template PDF and returns result as bytes."""
+    """Merges the overlay with the base PDF template."""
     template_reader = PdfReader(io.BytesIO(template_bytes))
     template_page = template_reader.pages[0]
 
@@ -168,12 +155,13 @@ def generate_payslip_bytes(template_bytes, data):
     writer.write(output_stream)
     return output_stream.getvalue()
 
-# --- Main App Layout ---
-st.title("PAYSLIP GENERATOR")
-st.caption("Automated payroll generation matching the PugArch PDF layout")
 
-# 1. Base Template Management
-default_template = "Pugarch Payslip.pdf"
+# --- Main Application Layout ---
+st.title("PAYSLIP GENERATOR")
+st.caption("PugArch automated payroll processing engine")
+
+# Template Resolver
+default_template = "Pugarch Payslip_1.pdf"
 uploaded_template = st.sidebar.file_uploader("Upload Base PDF (Optional)", type=["pdf"])
 
 template_bytes = None
@@ -183,22 +171,24 @@ elif os.path.exists(default_template):
     with open(default_template, "rb") as f:
         template_bytes = f.read()
 else:
-    st.sidebar.warning("Please upload 'Pugarch Payslip.pdf' to generate slips.")
+    st.sidebar.warning(f"Template '{default_template}' not found in root. Please upload it.")
 
-# 2. Employee Details
-st.subheader("1. Employee & Payroll Information")
+# 1. Header Information
+st.subheader("1. Employee & Attendance Details")
 col1, col2 = st.columns(2)
 with col1:
     pay_period = st.text_input("Pay Period", value="August 2026")
     emp_name = st.text_input("Employee Name", value="XYZ")
     account_number = st.text_input("Account Number", value="1234567890")
+    days_worked = st.text_input("Days Worked", value="26")
 
 with col2:
     emp_id = st.text_input("Employee ID", value="ABC0000")
     position = st.text_input("Position", value="Junior Developer")
     ifsc_code = st.text_input("IFSC Code", value="SGVCHJ8678")
+    days_on_leave = st.text_input("Days On Leave", value="0")
 
-# 3. Figures (Earnings & Deductions)
+# 2. Figures (Earnings & Deductions)
 st.subheader("2. Salary Figures (₹)")
 earn_col, ded_col = st.columns(2)
 
@@ -220,14 +210,14 @@ deductions["Total"] = sum(deductions.values())
 
 net_salary = earnings["Total"] - deductions["Total"]
 
-# 4. Live Summary Bar
+# 3. Summary Cards
 st.write("---")
 m1, m2, m3 = st.columns(3)
 m1.metric("TOTAL EARNINGS", f"₹ {earnings['Total']:,.2f}")
 m2.metric("TOTAL DEDUCTIONS", f"₹ {deductions['Total']:,.2f}")
 m3.metric("NET PAY", f"₹ {net_salary:,.2f}")
 
-# 5. Output / Download Action
+# 4. Generate & Download Action
 st.write("---")
 if template_bytes:
     payload = {
@@ -235,9 +225,11 @@ if template_bytes:
             "pay_period": pay_period,
             "emp_name": emp_name,
             "account_number": account_number,
+            "days_worked": days_worked,
             "emp_id": emp_id,
             "position": position,
             "ifsc_code": ifsc_code,
+            "days_on_leave": days_on_leave
         },
         "earnings": earnings,
         "deductions": deductions,
@@ -257,4 +249,4 @@ if template_bytes:
         mime="application/pdf"
     )
 else:
-    st.error("Cannot generate payslip without a base template. Please upload your template PDF in the sidebar.")
+    st.error("Missing PDF template. Please upload 'Pugarch Payslip_1.pdf' in the sidebar.")
