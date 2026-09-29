@@ -9,7 +9,8 @@ from PyPDF2 import PdfReader, PdfWriter
 st.set_page_config(
     page_title="PugArch Payslip Generator",
     page_icon="📄",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 st.markdown("""
@@ -18,6 +19,11 @@ st.markdown("""
     .stApp {
         background-color: #0A090D;
         color: #FFFFFF;
+    }
+    
+    /* Hide Streamlit Sidebar Completely */
+    [data-testid="stSidebar"], section[data-testid="stSidebarNav"] {
+        display: none !important;
     }
     
     /* Section Headers & Labels */
@@ -76,7 +82,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Field lists matching Pugarch Payslip_1.pdf
+# Field definitions matching Pugarch Payslip_1.pdf[cite: 11]
 EARNINGS_KEYS = [
     "Basic Pay", "HRA", "Conveyance", "Medical Allowance", 
     "DA", "Incentives"
@@ -101,7 +107,7 @@ def create_overlay(data):
     c.drawString(420, 642, f"{data['details']['ifsc_code']}")
     c.drawString(420, 620, f"{data['details']['days_on_leave']}")
 
-    # Shared horizontal center for the Amount column
+    # Common horizontal center for the Amount column
     X_AMOUNT = 412
 
     # 2. Earnings Table (13pt Helvetica)
@@ -160,18 +166,16 @@ def generate_payslip_bytes(template_bytes, data):
 st.title("PAYSLIP GENERATOR")
 st.caption("PugArch automated payroll processing engine")
 
-# Template Resolver
-default_template = "Pugarch Payslip_1.pdf"
-uploaded_template = st.sidebar.file_uploader("Upload Base PDF (Optional)", type=["pdf"])
-
+# Directly load the local template PDF without displaying an upload button[cite: 18]
+TEMPLATE_FILE = "Pugarch Payslip_1.pdf"
 template_bytes = None
-if uploaded_template:
-    template_bytes = uploaded_template.read()
-elif os.path.exists(default_template):
-    with open(default_template, "rb") as f:
+
+if os.path.exists(TEMPLATE_FILE):
+    with open(TEMPLATE_FILE, "rb") as f:
         template_bytes = f.read()
-else:
-    st.sidebar.warning(f"Template '{default_template}' not found in root. Please upload it.")
+elif os.path.exists("Pugarch Payslip.pdf"):
+    with open("Pugarch Payslip.pdf", "rb") as f:
+        template_bytes = f.read()
 
 # 1. Header Information
 st.subheader("1. Employee & Attendance Details")
@@ -249,4 +253,4 @@ if template_bytes:
         mime="application/pdf"
     )
 else:
-    st.error("Missing PDF template. Please upload 'Pugarch Payslip_1.pdf' in the sidebar.")
+    st.error(f"Base template '{TEMPLATE_FILE}' was not found in the repository root. Please ensure the file is committed to your repository.")
