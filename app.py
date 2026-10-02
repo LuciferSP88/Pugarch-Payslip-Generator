@@ -21,7 +21,7 @@ st.markdown("""
         color: #FFFFFF;
     }
     
-    /* Hide Streamlit Sidebar Completely */
+    /* Completely hide Streamlit Sidebar */
     [data-testid="stSidebar"], section[data-testid="stSidebarNav"] {
         display: none !important;
     }
@@ -82,16 +82,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Field definitions matching Pugarch Payslip_1.pdf[cite: 11]
+# Updated field listings matching the template[cite: 9]
 EARNINGS_KEYS = [
     "Basic Pay", "HRA", "Conveyance", "Medical Allowance", 
-    "DA", "Incentives"
+    "KRA", "DA", "Incentives"
 ]
 DEDUCTIONS_KEYS = ["PT", "Leave Without Pay"]
 
 
 def create_overlay(data):
-    """Draws values onto a transparent PDF overlay using calibrated coordinates."""
+    """Draws values onto a transparent PDF overlay using calibrated coordinates and enlarged fonts."""
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=letter)
 
@@ -107,36 +107,38 @@ def create_overlay(data):
     c.drawString(420, 642, f"{data['details']['ifsc_code']}")
     c.drawString(420, 620, f"{data['details']['days_on_leave']}")
 
-    # Common horizontal center for the Amount column
-    X_AMOUNT = 412
+    # Common horizontal center anchor for the Amount column
+    X_AMOUNT = 414
 
-    # 2. Earnings Table (13pt Helvetica)
-    c.setFont("Helvetica", 13)
-    y_earnings = 513.5
+    # 2. Earnings Table (15pt Helvetica)
+    c.setFont("Helvetica", 15)
+    y_earnings = 532.0
     row_pitch_earnings = 26.85
 
     for category in EARNINGS_KEYS:
         amount = data["earnings"].get(category, 0.0)
-        c.drawCentredString(X_AMOUNT, round(y_earnings), f"{amount:.2f}")
+        c.drawCentredString(X_AMOUNT, round(y_earnings, 2), f"{amount:.2f}")
         y_earnings -= row_pitch_earnings
             
-    c.drawCentredString(X_AMOUNT, 352, f"{data['earnings']['Total']:.2f}")
+    # Earnings Total Row
+    c.drawCentredString(X_AMOUNT, 336.5, f"{data['earnings']['Total']:.2f}")
 
-    # 3. Deductions Table (13pt Helvetica)
-    c.setFont("Helvetica", 13)
-    y_deductions = 251.0
-    row_pitch_deductions = 26.85
+    # 3. Deductions Table (15pt Helvetica)
+    c.setFont("Helvetica", 15)
+    y_deductions = 241.0
+    row_pitch_deductions = 27.0
 
     for category in DEDUCTIONS_KEYS:
         amount = data["deductions"].get(category, 0.0)
-        c.drawCentredString(X_AMOUNT, round(y_deductions), f"{amount:.2f}")
+        c.drawCentredString(X_AMOUNT, round(y_deductions, 2), f"{amount:.2f}")
         y_deductions -= row_pitch_deductions
             
-    c.drawCentredString(X_AMOUNT, 195.0, f"{data['deductions']['Total']:.2f}")
+    # Deductions Total Row
+    c.drawCentredString(X_AMOUNT, 181.5, f"{data['deductions']['Total']:.2f}")
 
-    # 4. Net Salary (14pt Bold)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(185, 162, f"{data['net_salary']:.2f}")
+    # 4. Net Salary (16pt Bold)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(185, 148, f"{data['net_salary']:.2f}")
 
     c.save()
     packet.seek(0)
@@ -144,7 +146,7 @@ def create_overlay(data):
 
 
 def generate_payslip_bytes(template_bytes, data):
-    """Merges the overlay with the base PDF template."""
+    """Merges the overlay onto the base template."""
     template_reader = PdfReader(io.BytesIO(template_bytes))
     template_page = template_reader.pages[0]
 
@@ -166,18 +168,20 @@ def generate_payslip_bytes(template_bytes, data):
 st.title("PAYSLIP GENERATOR")
 st.caption("PugArch automated payroll processing engine")
 
-# Directly load the local template PDF without displaying an upload button[cite: 18]
-TEMPLATE_FILE = "Pugarch Payslip_1.pdf"
+# Automatically resolve the base PDF template
+TEMPLATE_CANDIDATES = [
+    "Pugarch Payslip_2.pdf",
+    "Pugarch Payslip.pdf",
+    "Pugarch Payslip_1.pdf"
+]
+template_file = next((f for f in TEMPLATE_CANDIDATES if os.path.exists(f)), None)
+
 template_bytes = None
-
-if os.path.exists(TEMPLATE_FILE):
-    with open(TEMPLATE_FILE, "rb") as f:
-        template_bytes = f.read()
-elif os.path.exists("Pugarch Payslip.pdf"):
-    with open("Pugarch Payslip.pdf", "rb") as f:
+if template_file:
+    with open(template_file, "rb") as f:
         template_bytes = f.read()
 
-# 1. Header Information
+# 1. Employee Details Section
 st.subheader("1. Employee & Attendance Details")
 col1, col2 = st.columns(2)
 with col1:
@@ -192,7 +196,7 @@ with col2:
     ifsc_code = st.text_input("IFSC Code", value="SGVCHJ8678")
     days_on_leave = st.text_input("Days On Leave", value="0")
 
-# 2. Figures (Earnings & Deductions)
+# 2. Salary Breakdown (Earnings & Deductions)
 st.subheader("2. Salary Figures (₹)")
 earn_col, ded_col = st.columns(2)
 
@@ -214,7 +218,7 @@ deductions["Total"] = sum(deductions.values())
 
 net_salary = earnings["Total"] - deductions["Total"]
 
-# 3. Summary Cards
+# 3. Live Metrics Summary
 st.write("---")
 m1, m2, m3 = st.columns(3)
 m1.metric("TOTAL EARNINGS", f"₹ {earnings['Total']:,.2f}")
@@ -253,4 +257,4 @@ if template_bytes:
         mime="application/pdf"
     )
 else:
-    st.error(f"Base template '{TEMPLATE_FILE}' was not found in the repository root. Please ensure the file is committed to your repository.")
+    st.error("Base PDF template was not found. Please verify that your template PDF is committed to the root directory.")
